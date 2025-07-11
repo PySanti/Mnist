@@ -79,6 +79,6 @@ Target de la imagen mostrada : 3
 
 Imagen:
 
-[Imagen no encontrada](./images/image_1.png)
+![Imagen no encontrada](./images/image_1.png)
 
 ## Entrenamiento - Evaluacion
