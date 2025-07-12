@@ -440,4 +440,4 @@ Epoch 15/15
 Rendimiento para test
 157/157 ━━━━━━━━━━━━━━━━━━━━ 0s 2ms/step - accuracy: 0.9747 - loss: 0.1607 
 ```
-!(Imagen no encontrada)[./images/image_2.png]
+![Imagen no encontrada](./images/image_2.png)
