@@ -240,3 +240,204 @@ X_val = (X_val / 255.00).astype(float)
 Se normalizaron los conjuntos.
 
 ## Entrenamiento - Evaluacion
+
+Utilizando el siguiente codigo:
+
+```
+
+# utils/model_builder.py
+
+from tensorflow import keras
+from keras import layers
+from keras import optimizers
+
+def model_builder(hp):
+    net = keras.Sequential()
+    learning_rate = hp.Choice('learning_rate', values=[1e-4, 1e-3, 1e-2])
+    num_layers = hp.Int('num_layers', min_value=2, max_value=5)
+
+
+    net.add(layers.Flatten(input_shape=(28,28)))
+
+    for i in range(num_layers):
+        units_ = hp.Int(f'num_units_{i}', min_value=15, max_value=120, step=15)
+        net.add(layers.Dense(units=units_, activation='relu'))
+
+
+    net.add(layers.Dense(units=10, activation='softmax'))
+
+    net.compile(
+        loss= 'sparse_categorical_crossentropy',
+        optimizer=optimizers.Adam(learning_rate=learning_rate),
+        metrics=['accuracy']
+    )
+
+    return net
+
+# main.py
+
+
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+from pandas import Series
+from keras_tuner import Hyperband
+from utils.model_builder import model_builder
+
+# carga del conjunto
+(X_train, Y_train), (X_test, Y_test) = keras.datasets.mnist.load_data()
+
+# division del conjunto
+X_test, X_val, Y_test, Y_val = train_test_split(X_test, Y_test, test_size=.5, random_state=42, stratify=Y_test)
+
+# normalizacion
+
+X_train = (X_train / 255.00).astype(float)
+X_test = (X_test / 255.00).astype(float)
+X_val = (X_val / 255.00).astype(float)
+
+
+tuner = Hyperband(
+    model_builder,
+    objective='val_accuracy',
+    max_epochs=10,
+    factor=2,
+    directory='train_results',
+    project_name='mnist'
+)
+
+tuner.search(
+    X_train, Y_train,
+    validation_data=(X_val, Y_val)
+)
+
+best_model = tuner.get_best_models(num_models=1)[0]
+best_hyperparameters = tuner.get_best_hyperparameters()[0]
+
+print("Mejor combinacion de hiperparametros")
+print(best_hyperparameters.values)
+
+```
+
+Se obtuvieron los siguientes resultados:
+
+```
+Best val_accuracy So Far: 0.9805999994277954
+
+Total elapsed time: 00h 13m 09s
+
+Mejor combinacion de hiperparametros
+
+{'learning_rate': 0.001, 'num_layers': 3, 'num_units_0': 120, 'num_units_1': 15, 'num_units_2': 75, 'num_units_3': 15, 'num_units_4': 30, 'tuner/epochs': 10, 'tuner/initial_epoch': 5, 'tuner/bracket': 2, 'tuner/round': 2, 'tuner/trial_id': '0027'}
+
+```
+
+El rendimiento del modelo para el conjunto de test fue el siguiente:
+
+```
+157/157 ━━━━━━━━━━━━━━━━━━━━ 0s 1ms/step - accuracy: 0.9755 - loss: 0.1204
+```
+
+Luego, modificamos el model builder para implementar estrategias de regularizacion `l2` y `dropout`.
+
+Ademas, aumentamos el `max_epochs` de Hyperband para aumentar el espacio de busqueda de hiperparametros.
+
+```
+from tensorflow import keras
+from keras import layers
+from keras import optimizers
+from keras import regularizers
+
+def model_builder(hp):
+    net = keras.Sequential()
+    learning_rate = hp.Choice('learning_rate', values=[1e-4, 1e-3, 1e-2])
+    num_layers = hp.Int('num_layers', min_value=2, max_value=5)
+
+
+    net.add(layers.Flatten(input_shape=(28,28)))
+
+    for i in range(num_layers):
+        l2 = hp.Choice(f'l2_{i}', values=[1e-4, 1e-3, 1e-2])
+        drop = hp.Float(f'drop_{i}', min_value=0.2, max_value=4, step=0.5)
+        units_ = hp.Int(f'num_units_{i}', min_value=15, max_value=120, step=15)
+
+        net.add(layers.Dense(units=units_, activation='relu', kernel_regularizer=regularizers.l2(l2)))
+        net.add(layers.Dropout(drop))
+
+
+    net.add(layers.Dense(units=10, activation='softmax'))
+
+    net.compile(
+        loss= 'sparse_categorical_crossentropy',
+        optimizer=optimizers.Adam(learning_rate=learning_rate),
+        metrics=['accuracy']
+    )
+
+    return net
+```
+
+Se obtuvieron los siguientes resultados:
+
+```
+Best val_accuracy So Far: 0.9760000109672546
+
+Total elapsed time: 00h 18m 39s
+
+{'learning_rate': 0.0001, 'num_layers': 3, 'l2_0': 0.01, 'drop_0': 0.25, 'num_units_0': 120, 'l2_1': 0.0001, 'drop_1': 0.2, 'num_units_1': 105, 'l2_2': 0.0001, 'drop_2': 0.2, 'num_units_2': 120, 'l2_3': 0.01, 'drop_3': 0.25, 'num_units_3': 15, 'tuner/epochs': 15, 'tuner/initial_epoch': 8, 'tuner/bracket': 3, 'tuner/round': 3, 'tuner/trial_id': '0015', 'l2_4': 0.01, 'drop_4': 0.2, 'num_units_4': 30}
+```
+
+Luego utilizando el siguiente codigo, se reentreno el modelo utilizando los hiperparametros obtenidos y se grafico el historial de entrenamiento:
+
+```
+
+# resultados
+best_hps = tuner.get_best_hyperparameters()[0]
+model = tuner.hypermodel.build(best_hps)
+
+history = model.fit(
+    X_train, Y_train,
+    validation_data=(X_val, Y_val),
+    epochs=15
+)
+print('Rendimiento para test')
+print(model.evaluate(X_test, Y_test))
+show_train_history(history)
+```
+
+Se obtuvieron los siguientes resultados:
+
+```
+Epoch 1/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 6s 3ms/step - accuracy: 0.5575 - loss: 2.5366 - val_accuracy: 0.9098 - val_loss: 0.7300
+Epoch 2/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.8777 - loss: 0.7745 - val_accuracy: 0.9378 - val_loss: 0.4640
+Epoch 3/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9097 - loss: 0.5369 - val_accuracy: 0.9464 - val_loss: 0.3544
+Epoch 4/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9265 - loss: 0.4192 - val_accuracy: 0.9520 - val_loss: 0.3012
+Epoch 5/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9363 - loss: 0.3542 - val_accuracy: 0.9608 - val_loss: 0.2521
+Epoch 6/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9433 - loss: 0.3127 - val_accuracy: 0.9658 - val_loss: 0.2244
+Epoch 7/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9493 - loss: 0.2787 - val_accuracy: 0.9686 - val_loss: 0.2076
+Epoch 8/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9536 - loss: 0.2530 - val_accuracy: 0.9706 - val_loss: 0.1965
+Epoch 9/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9572 - loss: 0.2397 - val_accuracy: 0.9708 - val_loss: 0.1944
+Epoch 10/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9593 - loss: 0.2302 - val_accuracy: 0.9740 - val_loss: 0.1794
+Epoch 11/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9617 - loss: 0.2190 - val_accuracy: 0.9726 - val_loss: 0.1783
+Epoch 12/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9622 - loss: 0.2102 - val_accuracy: 0.9758 - val_loss: 0.1691
+Epoch 13/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9644 - loss: 0.2042 - val_accuracy: 0.9724 - val_loss: 0.1746
+Epoch 14/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9662 - loss: 0.1994 - val_accuracy: 0.9788 - val_loss: 0.1585
+Epoch 15/15
+1875/1875 ━━━━━━━━━━━━━━━━━━━━ 5s 3ms/step - accuracy: 0.9672 - loss: 0.1928 - val_accuracy: 0.9762 - val_loss: 0.1619
+
+Rendimiento para test
+157/157 ━━━━━━━━━━━━━━━━━━━━ 0s 2ms/step - accuracy: 0.9747 - loss: 0.1607 
+```
+!(Imagen no encontrada)[./images/image_2.png]
