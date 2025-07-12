@@ -8,6 +8,8 @@ Este problema ya fue resuelto por nosotros en un  [ejercicio pasado](https://git
 
 ## Preprocesamiento
 
+### Visualizacion del conjunto
+
 Primeramente, visualizando el conjunto de datos:
 
 ```
@@ -80,5 +82,161 @@ Target de la imagen mostrada : 3
 Imagen:
 
 ![Imagen no encontrada](./images/image_1.png)
+
+Cada matriz (imagen) de 28x28 contiene 28 vectores de 28 enteros, donde cada entero es un valor entre 0 y 255.
+
+Por lo tanto, las unicas estrategias que utilizaremos seran : `aplanamiento`, `normalizacion`.
+
+### Distribucion de target
+
+Luego, a traves del siguiente codigo:
+
+```
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+from pandas import Series
+
+(X_train, Y_train), (X_test, Y_test) = keras.datasets.mnist.load_data()
+
+def show_target(set_):
+    for a in Series(set_).value_counts().items():
+        print(f'{a[0]} : {a[1]/len(set_)*100:.2f}')
+        
+
+print('Distribucion de target en y_train')
+show_target(Y_train)
+
+print('Distribucion de target en y_test')
+show_target(Y_test)
+```
+
+Obtuvimos el siguiente resultado:
+
+```
+Distribucion de target en y_train
+1 : 11.24
+7 : 10.44
+3 : 10.22
+2 : 9.93
+9 : 9.92
+0 : 9.87
+6 : 9.86
+8 : 9.75
+4 : 9.74
+5 : 9.04
+
+Distribucion de target en y_test
+1 : 11.35
+2 : 10.32
+7 : 10.28
+3 : 10.10
+9 : 10.09
+4 : 9.82
+0 : 9.80
+8 : 9.74
+6 : 9.58
+5 : 8.92
+```
+
+Se puede concluir que hay ~10% de registros para cada clase en los conjuntos de train y test.
+
+### Division del conjunto
+
+Utilizamos `sklearn.model_selection.train_test_split` para dividir los conjuntos de datos y generar un conjunto de validacion:
+
+```
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+from pandas import Series
+
+(X_train, Y_train), (X_test, Y_test) = keras.datasets.mnist.load_data()
+X_test, X_val, Y_test, Y_val = train_test_split(X_test, Y_test, test_size=.5, random_state=42, stratify=Y_test)
+
+
+
+def show_set(set_):
+    print(set_[0].shape)
+    print(set_[1].shape)
+    print('\n')
+    for a in Series(set_[1]).value_counts().items():
+        print(f'{a[0]} : {a[1]/len(set_[1])*100:.2f}')
+        
+
+print('Descripcion de train set')
+show_set([X_train, Y_train])
+
+print('Descripcion de train set')
+show_set([X_test, Y_test])
+
+print('Descripcion de train set')
+show_set([X_val, Y_val])
+```
+
+Obtuvimos los siguientes resultados:
+
+```
+Descripcion de train set
+(60000, 28, 28)
+(60000,)
+
+
+1 : 11.24
+7 : 10.44
+3 : 10.22
+2 : 9.93
+9 : 9.92
+0 : 9.87
+6 : 9.86
+8 : 9.75
+4 : 9.74
+5 : 9.04
+
+Descripcion de train set
+(5000, 28, 28)
+(5000,)
+
+
+1 : 11.34
+2 : 10.32
+7 : 10.28
+3 : 10.10
+9 : 10.10
+4 : 9.82
+0 : 9.80
+8 : 9.74
+6 : 9.58
+5 : 8.92
+
+Descripcion de train set
+(5000, 28, 28)
+(5000,)
+
+
+1 : 11.36
+2 : 10.32
+7 : 10.28
+3 : 10.10
+9 : 10.08
+4 : 9.82
+0 : 9.80
+8 : 9.74
+6 : 9.58
+5 : 8.92
+```
+
+### Normalizacion
+
+Buscaremos normalizar los valores teniendo en cuenta que las redes neuronales se ven beneficiadas de esta estrategia.
+
+A traves del siguiente codigo:
+
+```
+X_train = (X_train / 255.00).astype(float)
+X_test = (X_test / 255.00).astype(float)
+X_val = (X_val / 255.00).astype(float)
+
+```
+
+Se normalizaron los conjuntos.
 
 ## Entrenamiento - Evaluacion
